@@ -1,0 +1,6 @@
+[package]
+name = "usbip-server"
+version = "0.1.0"
+authors = ["Kyle Petryszak <projectinitiativedev@gmail.com>"]
+
+[dependencies]
