@@ -30,12 +30,6 @@ fn main() {
     let vid_base10 = convert_hex_to_u16(&vid_hex);
     let pid_base10 = convert_hex_to_u16(&pid_hex);
 
-    if vid_base10 == 0 || pid_base10 == 0
-    {
-        println!("error, inputing ID!");
-        return;
-    }
-
     match Context::new() {
         Ok(mut context) => match open_device(&mut context, vid_base10, pid_base10) {
             Some((mut device, device_desc, mut handle)) => {
@@ -51,7 +45,12 @@ fn convert_hex_to_u16(hex: &str) -> u16
 {
     match u16::from_str_radix(without_hex_prefix(&hex), 16)
     {
-        Err(_e) => 0,
+        // Err(e) => panic!("Input must be in hex format"),
+        Err(_e) =>
+        {
+            println!("Input must be in hex form!");
+            std::process::exit(1);
+        },
         Ok(i) => i as u16,
     }
 }
