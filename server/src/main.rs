@@ -91,7 +91,7 @@ fn read_device<T: UsbContext>(
     device: &mut Device<T>,
     device_desc: &DeviceDescriptor,
     handle: &mut DeviceHandle<T>,
-) -> Result<()> {
+    ) -> Result<()> {
     handle.reset()?;
 
     let timeout = Duration::from_secs(1);
@@ -122,7 +122,6 @@ fn read_device<T: UsbContext>(
                 .ok()
         );
     }
-
     match find_readable_endpoint(device, device_desc, TransferType::Interrupt) {
         Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Interrupt),
         None => println!("No readable interrupt endpoint"),
@@ -131,6 +130,16 @@ fn read_device<T: UsbContext>(
     match find_readable_endpoint(device, device_desc, TransferType::Bulk) {
         Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Bulk),
         None => println!("No readable bulk endpoint"),
+    }
+
+    match find_readable_endpoint(device, device_desc, TransferType::Control) {
+        Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Control),
+        None => println!("No readable control endpoint"),
+    }
+
+    match find_readable_endpoint(device, device_desc, TransferType::Isochronous) {
+        Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Isochronous),
+        None => println!("No readable isochronous endpoint"),
     }
 
     Ok(())
@@ -175,6 +184,8 @@ fn read_endpoint<T: UsbContext>(
 ) {
     println!("Reading from endpoint: {:?}", endpoint);
 
+    // handle.detach_kernel_driver(endpoint.iface).ok();
+    // let has_kernel_driver = false;
     let has_kernel_driver = match handle.kernel_driver_active(endpoint.iface) {
         Ok(true) => {
             handle.detach_kernel_driver(endpoint.iface).ok();
@@ -184,11 +195,12 @@ fn read_endpoint<T: UsbContext>(
     };
 
     println!(" - kernel driver? {}", has_kernel_driver);
-
     match configure_endpoint(handle, &endpoint) {
         Ok(_) => {
             let mut buf = [0; 256];
             let timeout = Duration::from_secs(1);
+
+
 
             match transfer_type {
                 TransferType::Interrupt => {
@@ -196,15 +208,27 @@ fn read_endpoint<T: UsbContext>(
                         Ok(len) => {
                             println!(" - read: {:?}", &buf[..len]);
                         }
-                        Err(err) => println!("could not read from endpoint: {}", err),
+                        Err(err) => println!("could not read interupt endpoint: {}", err),
                     }
                 }
                 TransferType::Bulk => match handle.read_bulk(endpoint.address, &mut buf, timeout) {
                     Ok(len) => {
                         println!(" - read: {:?}", &buf[..len]);
                     }
-                    Err(err) => println!("could not read from endpoint: {}", err),
+                    Err(err) => println!("could not read bulk endpoint: {}", err),
                 },
+                // TransferType::Control => match handle.read_control(endpoint.address, &mut buf, timeout) {
+                //     Ok(len) => {
+                //         println!(" - read: {:?}", &buf[..len]);
+                //     }
+                //     Err(err) => println!("could not read from endpoint: {}", err),
+                // },
+                // TransferType::Bulk => match handle.read_isochronous(endpoint.address, &mut buf, timeout) {
+                //     Ok(len) => {
+                //         println!(" - read: {:?}", &buf[..len]);
+                //     }
+                //     Err(err) => println!("could not read from endpoint: {}", err),
+                // },
                 _ => (),
             }
         }
@@ -221,7 +245,10 @@ fn configure_endpoint<T: UsbContext>(
     endpoint: &Endpoint,
 ) -> Result<()> {
     handle.set_active_configuration(endpoint.config)?;
+    println!("set active config");
     handle.claim_interface(endpoint.iface)?;
+    println!("claimed interface");
     handle.set_alternate_setting(endpoint.iface, endpoint.setting)?;
+    println!("set alternative setting");
     Ok(())
 }
