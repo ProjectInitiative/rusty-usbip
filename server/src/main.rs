@@ -32,7 +32,7 @@ fn main()
         println!("{:04x}:{:04x}:{:?}", device.vendor_id(), device.product_id(), device.path());
     }
    
-    let try_open_dev = api.open_path(&CString::new("0009:0006:03").unwrap());
+    let try_open_dev = api.open_path(&CString::new("\\\\?\\hid#ven_8086&dev_9d3e&subsys_00000000&rev_21&col07#4&f87ce30&0&0006#{4d1e55b2-f16f-11cf-88cb-001111000030}").unwrap());
     // let try_open_dev = api.open(vid_base10, pid_base10);
     // let try_open_dev = api.open(0x062a, 0x5918);
     
