@@ -1,5 +1,5 @@
 extern crate clap;
-use clap::{Arg, App};
+use self::clap::{Arg, App};
 
 pub fn get_matches() -> clap::ArgMatches<'static>
 {
@@ -7,16 +7,16 @@ pub fn get_matches() -> clap::ArgMatches<'static>
                     .version("0.0.1")
                     .author("Kyle Petryszak <projectinitiativedev@gmail.com>")
                     .about("USB network server")
-                    // .arg(Arg::with_name("config")
-                    //     .short("c")
-                    //     .long("config")
-                    //     .value_name("FILE")
-                    //     .help("Sets a custom config file")
-                    //     .takes_value(true))
-                    // .arg(Arg::with_name("INPUT")
-                    //     .help("Sets the input file to use")
-                    //     .required(true)
-                    //     .index(1))
+                    .arg(Arg::with_name("vendor_id")
+                        .value_name("VID")
+                        .help("Sets the vendor ID for the program")
+                        .required(true)
+                        .takes_value(true))
+                    .arg(Arg::with_name("product_id")
+                        .value_name("PID")
+                        .help("Sets the product ID for the program")
+                        .required(true)
+                        .takes_value(true))
                     .arg(Arg::with_name("v")
                         .short("v")
                         .multiple(true)

@@ -1,44 +1,54 @@
+mod options;
+// mod config;
+// mod oshelper;
+
 extern crate rusb;
+extern crate hidapi;
 
-use std::{str::FromStr, time::Duration};
+use std::io::{ErrorKind, Read, Write};
+use std::net::TcpListener;
+use std::sync::mpsc;
+use std::thread;
+use std::{str::FromStr};
 
-use rusb::{
-    Context, Device, DeviceDescriptor, DeviceHandle, Direction, Result, TransferType, UsbContext,
-};
+extern crate libc;
 
-#[derive(Debug)]
-struct Endpoint {
-    config: u8,
-    iface: u8,
-    setting: u8,
-    address: u8,
-}
+use libc::c_char;
+use std::ffi::CString;
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
+fn main() 
+{
+    let matches = options::get_matches();
 
-
-    if args.len() < 3 {
-        println!("usage: read_device <vendor-id> <product-id>");
-        return;
-    }
-
-    let vid_hex: String = FromStr::from_str(args[1].as_ref()).unwrap();
-    let pid_hex: String = FromStr::from_str(args[2].as_ref()).unwrap();
-    
+    let vid_hex: String = FromStr::from_str(matches.value_of("vendor_id").unwrap()).unwrap();
+    let pid_hex: String = FromStr::from_str(matches.value_of("product_id").unwrap()).unwrap();
 
     let vid_base10 = convert_hex_to_u16(&vid_hex);
     let pid_base10 = convert_hex_to_u16(&pid_hex);
 
-    match Context::new() {
-        Ok(mut context) => match open_device(&mut context, vid_base10, pid_base10) {
-            Some((mut device, device_desc, mut handle)) => {
-                read_device(&mut device, &device_desc, &mut handle).unwrap()
-            }
-            None => println!("could not find device {:04x}:{:04x}", vid_base10, pid_base10),
-        },
-        Err(e) => panic!("could not initialize libusb: {}", e),
+    let api = hidapi::HidApi::new().unwrap();
+    for device in api.device_list() 
+    {
+        println!("{:04x}:{:04x}:{:?}", device.vendor_id(), device.product_id(), device.path());
     }
+   
+    let try_open_dev = api.open_path(&CString::new("0009:0006:03").unwrap());
+    // let try_open_dev = api.open(vid_base10, pid_base10);
+    // let try_open_dev = api.open(0x062a, 0x5918);
+    
+    if try_open_dev.is_ok()
+    {
+        let device = try_open_dev.unwrap();
+        device.set_blocking_mode(true).unwrap();
+        for _ in 0..1000
+        {
+            // Read data from device
+            let mut buf = [0u8; 8];
+            let res = device.read(&mut buf[..]).unwrap();
+            println!("Read: {:?}", &buf[..res]);
+        }       
+    }
+
 }
 
 fn convert_hex_to_u16(hex: &str) -> u16
@@ -51,7 +61,7 @@ fn convert_hex_to_u16(hex: &str) -> u16
             println!("Input must be in hex form!");
             std::process::exit(1);
         },
-        Ok(i) => i as u16,
+        Ok(int) => int as u16,
     }
 }
 
@@ -60,195 +70,3 @@ fn without_hex_prefix(hex: &str) -> &str
     hex.trim_start_matches("0x")
 }
 
-fn open_device<T: UsbContext>(
-    context: &mut T,
-    vid: u16,
-    pid: u16,
-) -> Option<(Device<T>, DeviceDescriptor, DeviceHandle<T>)> {
-    let devices = match context.devices() {
-        Ok(d) => d,
-        Err(_) => return None,
-    };
-
-    for device in devices.iter() {
-        let device_desc = match device.device_descriptor() {
-            Ok(d) => d,
-            Err(_) => continue,
-        };
-
-        if device_desc.vendor_id() == vid && device_desc.product_id() == pid {
-            match device.open() {
-                Ok(handle) => return Some((device, device_desc, handle)),
-                Err(_) => continue,
-            }
-        }
-    }
-
-    None
-}
-
-fn read_device<T: UsbContext>(
-    device: &mut Device<T>,
-    device_desc: &DeviceDescriptor,
-    handle: &mut DeviceHandle<T>,
-    ) -> Result<()> {
-    handle.reset()?;
-
-    let timeout = Duration::from_secs(1);
-    let languages = handle.read_languages(timeout)?;
-
-    println!("Active configuration: {}", handle.active_configuration()?);
-    println!("Languages: {:?}", languages);
-
-    if languages.len() > 0 {
-        let language = languages[0];
-
-        println!(
-            "Manufacturer: {:?}",
-            handle
-                .read_manufacturer_string(language, device_desc, timeout)
-                .ok()
-        );
-        println!(
-            "Product: {:?}",
-            handle
-                .read_product_string(language, device_desc, timeout)
-                .ok()
-        );
-        println!(
-            "Serial Number: {:?}",
-            handle
-                .read_serial_number_string(language, device_desc, timeout)
-                .ok()
-        );
-    }
-    match find_readable_endpoint(device, device_desc, TransferType::Interrupt) {
-        Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Interrupt),
-        None => println!("No readable interrupt endpoint"),
-    }
-
-    match find_readable_endpoint(device, device_desc, TransferType::Bulk) {
-        Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Bulk),
-        None => println!("No readable bulk endpoint"),
-    }
-
-    match find_readable_endpoint(device, device_desc, TransferType::Control) {
-        Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Control),
-        None => println!("No readable control endpoint"),
-    }
-
-    match find_readable_endpoint(device, device_desc, TransferType::Isochronous) {
-        Some(endpoint) => read_endpoint(handle, endpoint, TransferType::Isochronous),
-        None => println!("No readable isochronous endpoint"),
-    }
-
-    Ok(())
-}
-
-fn find_readable_endpoint<T: UsbContext>(
-    device: &mut Device<T>,
-    device_desc: &DeviceDescriptor,
-    transfer_type: TransferType,
-) -> Option<Endpoint> {
-    for n in 0..device_desc.num_configurations() {
-        let config_desc = match device.config_descriptor(n) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
-        for interface in config_desc.interfaces() {
-            for interface_desc in interface.descriptors() {
-                for endpoint_desc in interface_desc.endpoint_descriptors() {
-                    if endpoint_desc.direction() == Direction::In
-                        && endpoint_desc.transfer_type() == transfer_type
-                    {
-                        return Some(Endpoint {
-                            config: config_desc.number(),
-                            iface: interface_desc.interface_number(),
-                            setting: interface_desc.setting_number(),
-                            address: endpoint_desc.address(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-fn read_endpoint<T: UsbContext>(
-    handle: &mut DeviceHandle<T>,
-    endpoint: Endpoint,
-    transfer_type: TransferType,
-) {
-    println!("Reading from endpoint: {:?}", endpoint);
-
-    // handle.detach_kernel_driver(endpoint.iface).ok();
-    // let has_kernel_driver = false;
-    let has_kernel_driver = match handle.kernel_driver_active(endpoint.iface) {
-        Ok(true) => {
-            handle.detach_kernel_driver(endpoint.iface).ok();
-            true
-        }
-        _ => false,
-    };
-
-    println!(" - kernel driver? {}", has_kernel_driver);
-    match configure_endpoint(handle, &endpoint) {
-        Ok(_) => {
-            let mut buf = [0; 256];
-            let timeout = Duration::from_secs(1);
-
-
-
-            match transfer_type {
-                TransferType::Interrupt => {
-                    match handle.read_interrupt(endpoint.address, &mut buf, timeout) {
-                        Ok(len) => {
-                            println!(" - read: {:?}", &buf[..len]);
-                        }
-                        Err(err) => println!("could not read interupt endpoint: {}", err),
-                    }
-                }
-                TransferType::Bulk => match handle.read_bulk(endpoint.address, &mut buf, timeout) {
-                    Ok(len) => {
-                        println!(" - read: {:?}", &buf[..len]);
-                    }
-                    Err(err) => println!("could not read bulk endpoint: {}", err),
-                },
-                // TransferType::Control => match handle.read_control(endpoint.address, &mut buf, timeout) {
-                //     Ok(len) => {
-                //         println!(" - read: {:?}", &buf[..len]);
-                //     }
-                //     Err(err) => println!("could not read from endpoint: {}", err),
-                // },
-                // TransferType::Bulk => match handle.read_isochronous(endpoint.address, &mut buf, timeout) {
-                //     Ok(len) => {
-                //         println!(" - read: {:?}", &buf[..len]);
-                //     }
-                //     Err(err) => println!("could not read from endpoint: {}", err),
-                // },
-                _ => (),
-            }
-        }
-        Err(err) => println!("could not configure endpoint: {}", err),
-    }
-
-    if has_kernel_driver {
-        handle.attach_kernel_driver(endpoint.iface).ok();
-    }
-}
-
-fn configure_endpoint<T: UsbContext>(
-    handle: &mut DeviceHandle<T>,
-    endpoint: &Endpoint,
-) -> Result<()> {
-    handle.set_active_configuration(endpoint.config)?;
-    println!("set active config");
-    handle.claim_interface(endpoint.iface)?;
-    println!("claimed interface");
-    handle.set_alternate_setting(endpoint.iface, endpoint.setting)?;
-    println!("set alternative setting");
-    Ok(())
-}

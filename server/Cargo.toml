@@ -5,3 +5,6 @@ authors = ["Kyle Petryszak <projectinitiativedev@gmail.com>"]
 
 [dependencies]
 rusb = "0.6.2"
+hidapi = "1.2.3"
+clap = "2.33.3"
+libc = "0.2.76"
