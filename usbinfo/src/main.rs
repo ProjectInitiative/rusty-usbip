@@ -34,22 +34,9 @@ fn main()
         devices.push(device);
     }
     //sort vector
-    devices.sort_by(|dev1, dev2|
-        {
-            if dev1.vendor_id() == dev2.vendor_id()
-            {
-                if dev1.product_id() > dev2.product_id()
-                {
-                    dev1.product_id();
-                }
-                if dev1.product_id() < dev2.product_id()
-                {
-                    dev2.product_id();
-                }
-            }
-            dev2.vendor_id().cmp(&dev1.vendor_id())
-        });
-            
+    devices.sort_by(|dev1, dev2| dev2.vendor_id().cmp(&dev1.vendor_id())
+                            .then(dev2.product_id().cmp(&dev1.product_id()))
+                            .then(dev2.path().cmp(&dev1.path())));
 
     for device in devices
     {
