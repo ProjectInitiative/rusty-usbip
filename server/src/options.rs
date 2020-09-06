@@ -3,7 +3,7 @@ use self::clap::{Arg, App};
 
 pub fn get_matches() -> clap::ArgMatches<'static>
 {
-    return App::new("Prox")
+    return App::new("usb-server")
                     .version("0.0.1")
                     .author("Kyle Petryszak <projectinitiativedev@gmail.com>")
                     .about("USB network server")
