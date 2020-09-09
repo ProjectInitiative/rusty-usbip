@@ -121,27 +121,26 @@ pub fn print_devices() -> Result<()>
 
 fn print_device<T: UsbContext>(device_desc: &DeviceDescriptor, handle: &mut Option<UsbDevice<T>>)
 {
-    println!(
-        "  iManufacturer        {:?}",
-        handle.as_mut().map_or(String::new(), |h| h
+    println!("{0:<20} {1:?}", 
+            "iManufacturer",
+            handle.as_mut().map_or(String::new(), |h| h
             .handle
             .read_manufacturer_string(h.language, device_desc, h.timeout)
             .unwrap())
     );
+    println!("{0:<20} {1:?}",
+            "iManufacturer index",
+             device_desc.manufacturer_string_index().unwrap());
     println!(
-        "  iproduct        {:?}",
-        handle.as_mut().map_or(String::new(), |h| h
+            "{0:<20} {1:?}",
+            "iProduct",
+            handle.as_mut().map_or(String::new(), |h| h
             .handle
             .read_product_string_ascii(device_desc)
             .unwrap())
     );
-    // println!("{:?}", handle.as_mut().unwrap().handle.read_product_string_ascii(device_desc))
-    // println!(
-    //     "  iManufacturer        {:3} {}",
-    //     device_desc.manufacturer_string_index().unwrap_or(0),
-    //     handle.as_mut().map_or(String::new(), |h| h
-    //         .handle
-    //         .read_manufacturer_string(h.language, device_desc, h.timeout)
-    //         .unwrap_or(String::new()))
-    // );
+    println!("{0:<20} {1:?}",
+            "iProduct index", 
+            device_desc.product_string_index().unwrap());
+    
 }
